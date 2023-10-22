@@ -25,6 +25,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { commitSession, getSession } from '~/sessions';
 import tailwindStyles from './tailwind.css';
+import { type Env, getNotesForUser } from './kv-notes';
 
 export const links: LinksFunction = () => [
   { rel: 'stylesheet', href: tailwindStyles },
@@ -54,35 +55,16 @@ const navigation = [
     icon: DocumentDuplicateIcon,
   },
 ];
-const notes: {
-  id: number;
-  name: string;
-  href: string;
-  initial: string;
-  current: boolean;
-}[] = [];
 
-type CategoryItem = {
-  id: string;
-  name: string;
-  notes: {
-    id: string;
-    title: string;
-    body: string;
-  }[];
-};
-
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function loader({ context, request }: LoaderFunctionArgs) {
+  let env = context.env as Env;
   const session = await getSession(request.headers.get('Cookie'));
-  const data: { categories: CategoryItem[] } = { categories: [] };
   if (!session.has('userId')) {
     const newUserId = crypto.randomUUID();
     session.set('userId', newUserId);
-  } else {
-    const userId = session.get('userId');
-    // TODO: read kv data for categories and notes
-    console.log(userId);
   }
+  const userId = session.get('userId');
+  const data = await getNotesForUser({ userId, env });
 
   return json(data, {
     headers: {
@@ -188,6 +170,7 @@ export default function App() {
                             {navigation.map((item) => (
                               <li key={item.href}>
                                 <NavLink
+                                  end
                                   to={item.href}
                                   className={({ isActive, isPending }) => {
                                     return classNames(
@@ -220,25 +203,59 @@ export default function App() {
                         </li>
                         <li>
                           <div className="text-xs font-semibold leading-6 text-blue-200">
+                            Your categories
+                          </div>
+                          <ul className="-mx-2 mt-2 space-y-1">
+                            {categories.map((category) => (
+                              <li key={category.id}>
+                                <NavLink
+                                  to={`/categories/${category.id}`}
+                                  className={({ isActive, isPending }) => {
+                                    return classNames(
+                                      isActive
+                                        ? 'bg-blue-700 text-white'
+                                        : 'text-blue-200 hover:bg-blue-700 hover:text-white',
+                                      'group flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6',
+                                    );
+                                  }}
+                                >
+                                  <span className="truncate">
+                                    {category.name}
+                                  </span>
+                                </NavLink>
+                              </li>
+                            ))}
+                          </ul>
+                        </li>
+                        <li>
+                          <div className="text-xs font-semibold leading-6 text-blue-200">
                             Your notes
                           </div>
                           <ul className="-mx-2 mt-2 space-y-1">
-                            {notes.map((team) => (
-                              <li key={team.name}>
-                                <a
-                                  href={team.href}
-                                  className={classNames(
-                                    team.current
-                                      ? 'bg-blue-700 text-white'
-                                      : 'text-blue-200 hover:bg-blue-700 hover:text-white',
-                                    'group flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6',
-                                  )}
+                            {categoryNotes.map((note) => (
+                              <li key={note.id}>
+                                <NavLink
+                                  to={`/categories/${note.categoryId}/notes/${note.id}`}
+                                  className={({ isActive, isPending }) => {
+                                    return classNames(
+                                      isActive
+                                        ? 'bg-blue-700 text-white'
+                                        : 'text-blue-200 hover:bg-blue-700 hover:text-white',
+                                      'group flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6',
+                                    );
+                                  }}
                                 >
                                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-blue-400 bg-blue-500 text-[0.625rem] font-medium text-white">
-                                    {team.initial}
+                                    {note.categoryName
+                                      .split(' ')
+                                      .map((word) => {
+                                        return word[0];
+                                      })
+                                      .join('')
+                                      .toUpperCase()}
                                   </span>
-                                  <span className="truncate">{team.name}</span>
-                                </a>
+                                  <span className="truncate">{note.title}</span>
+                                </NavLink>
                               </li>
                             ))}
                           </ul>
@@ -277,6 +294,7 @@ export default function App() {
                     {navigation.map((item) => (
                       <li key={item.href}>
                         <NavLink
+                          end
                           to={item.href}
                           className={({ isActive, isPending }) => {
                             return classNames(
@@ -308,25 +326,57 @@ export default function App() {
                 </li>
                 <li>
                   <div className="text-xs font-semibold leading-6 text-blue-200">
+                    Your categories
+                  </div>
+                  <ul className="-mx-2 mt-2 space-y-1">
+                    {categories.map((category) => (
+                      <li key={category.id}>
+                        <NavLink
+                          to={`/categories/${category.id}`}
+                          className={({ isActive, isPending }) => {
+                            return classNames(
+                              isActive
+                                ? 'bg-blue-700 text-white'
+                                : 'text-blue-200 hover:bg-blue-700 hover:text-white',
+                              'group flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6',
+                            );
+                          }}
+                        >
+                          <span className="truncate">{category.name}</span>
+                        </NavLink>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+                <li>
+                  <div className="text-xs font-semibold leading-6 text-blue-200">
                     Your notes
                   </div>
                   <ul className="-mx-2 mt-2 space-y-1">
                     {categoryNotes.map((note) => (
                       <li key={note.id}>
-                        <a
-                          href={`/${note.categoryId}/${note.id}`}
-                          className={classNames(
-                            note.categoryId === 'home'
-                              ? 'bg-blue-700 text-white'
-                              : 'text-blue-200 hover:bg-blue-700 hover:text-white',
-                            'group flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6',
-                          )}
+                        <NavLink
+                          to={`/categories/${note.categoryId}/notes/${note.id}`}
+                          className={({ isActive, isPending }) => {
+                            return classNames(
+                              isActive
+                                ? 'bg-blue-700 text-white'
+                                : 'text-blue-200 hover:bg-blue-700 hover:text-white',
+                              'group flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6',
+                            );
+                          }}
                         >
                           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-blue-400 bg-blue-500 text-[0.625rem] font-medium text-white">
-                            {note.categoryName.slice(0, 2)}
+                            {note.categoryName
+                              .split(' ')
+                              .map((word) => {
+                                return word[0];
+                              })
+                              .join('')
+                              .toUpperCase()}
                           </span>
                           <span className="truncate">{note.title}</span>
-                        </a>
+                        </NavLink>
                       </li>
                     ))}
                   </ul>
