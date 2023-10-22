@@ -8,9 +8,6 @@ import { getSession } from '~/sessions';
 export async function loader({ context, request }: LoaderFunctionArgs) {
   let env = context.env as Env;
   const session = await getSession(request.headers.get('Cookie'));
-  if (!session.has('userId')) {
-    throw new Response('Unauthorized', { status: 401 });
-  }
   const userId = session.get('userId');
   const data = await getNotesForUser({ userId, env });
 
